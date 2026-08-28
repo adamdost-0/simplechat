@@ -58,3 +58,8 @@ Reflect carefully on the original intent of the user and the problem statement. 
 VERSIONING
 Application versioning remains in `application/single_app/config.py`.
 Deployer and CI/CD versioning lives separately in `deployers/version.txt`; when files under `deployers/` are modified, increment `deployers/version.txt` as part of the same change, defaulting to a patch bump unless a deliberate minor or major compatibility change is intended.
+
+REPOSITORY ONTOLOGY
+Use `docs/_data/repository_ontology.yml` as the repository architecture map for change planning.
+Consult `.github/instructions/repository-ontology.instructions.md` before making broad changes, especially when the work may span auth, documents, search, workspaces, chat, agents, or deployment boundaries.
+When a change affects more than one subsystem, identify the owning component, inspect linked components and external systems, and preserve the existing ownership boundaries rather than introducing a new parallel module.

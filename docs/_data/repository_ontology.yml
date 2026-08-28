@@ -1,0 +1,324 @@
+version: 0.261.003
+schema: repository-ontology-v1
+generated_by: model_review_synthesis
+summary: >
+  SimpleChat is organized around a small set of stable subsystems: app bootstrap,
+  authentication, settings/admin control, document ingestion and retrieval, chat/RAG,
+  workspaces and collaboration, agent/workflow orchestration, storage/citations,
+  integrations, and delivery/operations. This ontology is intended for architecture-aware
+  change planning, not for exhaustive runtime enumeration.
+components:
+  - id: application-bootstrap
+    name: Application bootstrap and runtime
+    purpose: Creates the Flask app, configures sessions, registers blueprints, and wires startup services.
+    primary_files:
+      - application/single_app/app.py
+      - application/single_app/config.py
+      - application/single_app/swagger_wrapper.py
+    links_to:
+      - component: authentication
+      - component: settings-and-admin
+      - component: document-pipeline
+      - component: chat-rag
+      - external: Azure App Service
+    change_guidance: >
+      Treat changes here as cross-cutting. Startup, environment, middleware, and route-registration
+      edits can affect every route module that depends on the app factory.
+
+  - id: authentication
+    name: Authentication and access control
+    purpose: Handles sign-in, session identity, authorization guards, user scope, and role-based access.
+    primary_files:
+      - application/single_app/functions_authentication.py
+      - application/single_app/route_frontend_authentication.py
+      - application/single_app/route_backend_users.py
+    links_to:
+      - component: application-bootstrap
+      - component: workspaces-and-collaboration
+      - component: settings-and-admin
+      - external: Microsoft Entra ID
+    change_guidance: >
+      Auth changes can alter who can view documents, workspaces, and admin surfaces. Review access
+      behavior before changing decorators, user claims, or default roles.
+
+  - id: settings-and-admin
+    name: Settings and admin control plane
+    purpose: Stores deployment configuration, feature flags, admin pages, and control-center operations.
+    primary_files:
+      - application/single_app/functions_settings.py
+      - application/single_app/route_frontend_admin_settings.py
+      - application/single_app/route_frontend_control_center.py
+      - application/single_app/route_backend_settings.py
+    links_to:
+      - component: application-bootstrap
+      - component: document-pipeline
+      - component: chat-rag
+      - external: Azure Key Vault
+      - external: Azure App Service configuration
+    change_guidance: >
+      Settings and admin changes often alter runtime behavior across several feature modules.
+      Treat them as cross-cutting dependencies rather than isolated UI work.
+
+  - id: document-pipeline
+    name: Document ingestion, transformation, and storage
+    purpose: Accepts uploads, extracts text and structure, chunks content, records metadata, and prepares documents for retrieval.
+    primary_files:
+      - application/single_app/functions_documents.py
+      - application/single_app/route_backend_documents.py
+      - application/single_app/route_backend_group_documents.py
+      - application/single_app/route_external_public_documents.py
+    links_to:
+      - component: search-retrieval
+      - component: storage-and-citations
+      - component: workspaces-and-collaboration
+      - external: Azure AI Document Intelligence
+      - external: Azure Storage
+      - external: Azure AI Search
+    change_guidance: >
+      Upload rules, chunking logic, and document permissions impact search relevance,
+      citations, and workspace visibility. Review retrieval and workspace modules together.
+
+  - id: search-retrieval
+    name: Search and retrieval layer
+    purpose: Indexes document content and serves grounded context for chat, analytics, and citation workflows.
+    primary_files:
+      - application/single_app/functions_search.py
+      - application/single_app/functions_search_service.py
+      - application/single_app/route_backend_search.py
+      - application/single_app/route_backend_chats.py
+    links_to:
+      - component: chat-rag
+      - component: document-pipeline
+      - external: Azure AI Search
+      - external: Azure OpenAI embeddings
+    change_guidance: >
+      Retrieval changes affect answer quality, citation behavior, and access boundaries.
+      Validate them against document permissions and chat prompt behavior.
+
+  - id: chat-rag
+    name: Chat and retrieval-augmented generation
+    purpose: Handles chat requests, prompt orchestration, grounding context, streaming, and response generation.
+    primary_files:
+      - application/single_app/route_frontend_chats.py
+      - application/single_app/route_backend_chats.py
+      - application/single_app/functions_chat.py
+      - application/single_app/functions_content_safety.py
+    links_to:
+      - component: search-retrieval
+      - component: document-pipeline
+      - component: agents-and-workflows
+      - external: Azure OpenAI
+      - external: Azure AI Content Safety
+    change_guidance: >
+      Prompt, guardrail, or streaming changes should be validated against grounding,
+      safety, and citation flows before they ship.
+
+  - id: workspaces-and-collaboration
+    name: Personal, group, and public workspaces
+    purpose: Organizes user-owned documents, shared group workspaces, and public workspace experiences.
+    primary_files:
+      - application/single_app/route_frontend_workspace.py
+      - application/single_app/route_frontend_groups.py
+      - application/single_app/route_frontend_group_workspaces.py
+      - application/single_app/route_frontend_public_workspaces.py
+      - application/single_app/functions_group.py
+      - application/single_app/functions_public_workspaces.py
+    links_to:
+      - component: document-pipeline
+      - component: authentication
+      - component: collaboration
+      - external: Azure Cosmos DB
+    change_guidance: >
+      Workspace UX and access rules should be reviewed alongside document permissions,
+      group membership logic, and route-level access guards.
+
+  - id: collaboration
+    name: Collaboration and shared experiences
+    purpose: Supports shared prompts, notifications, and multi-user workflows.
+    primary_files:
+      - application/single_app/route_backend_collaboration.py
+      - application/single_app/functions_collaboration.py
+      - application/single_app/route_backend_notifications.py
+      - application/single_app/functions_notifications.py
+    links_to:
+      - component: workspaces-and-collaboration
+      - component: chat-rag
+      - external: Azure Cosmos DB
+    change_guidance: >
+      Shared-state features often depend on conversation metadata and workspace membership.
+      Inspect both before changing behavior.
+
+  - id: agents-and-workflows
+    name: Agents, prompts, and workflow orchestration
+    purpose: Supports agent catalog, prompt management, workflow execution, and orchestration features.
+    primary_files:
+      - application/single_app/functions_global_agents.py
+      - application/single_app/functions_personal_agents.py
+      - application/single_app/functions_agent_templates.py
+      - application/single_app/route_backend_workflows.py
+      - application/single_app/route_backend_agents.py
+    links_to:
+      - component: chat-rag
+      - component: workspaces-and-collaboration
+      - external: Azure OpenAI
+      - external: MCP-compatible tools
+    change_guidance: >
+      Agent and workflow changes should be traced through prompt templates, tool routing,
+      and chat execution contracts rather than treated as isolated feature work.
+
+  - id: storage-and-citations
+    name: Storage, export, and enhanced citations
+    purpose: Manages blob storage, exports, and citation artifacts that link content back to source files.
+    primary_files:
+      - application/single_app/functions_blob_storage_operations.py
+      - application/single_app/route_enhanced_citations.py
+      - application/single_app/route_backend_conversation_export.py
+      - application/single_app/functions_generated_file_exports.py
+    links_to:
+      - component: document-pipeline
+      - component: chat-rag
+      - external: Azure Storage
+      - external: Azure AI Document Intelligence
+    change_guidance: >
+      Citation and export changes can break user trust if they alter document provenance
+      or access boundaries. Review downstream chat and document-facing modules.
+
+  - id: integrations-and-extensions
+    name: Integrations and extension surfaces
+    purpose: Exposes plugin, OpenAPI, MCP, and external tool integration points for customization.
+    primary_files:
+      - application/single_app/route_openapi.py
+      - application/single_app/route_inbound_mcp.py
+      - application/single_app/functions_mcp_server_config.py
+      - application/single_app/functions_plugins.py
+    links_to:
+      - component: chat-rag
+      - component: agents-and-workflows
+      - external: OpenAPI services
+      - external: MCP servers
+    change_guidance: >
+      Integration changes should be reviewed from the perspective of auth, schema validation,
+      and agent or tool invocation rather than only the route handler itself.
+
+  - id: platform-operations
+    name: Delivery, deployment, and operational tooling
+    purpose: Maintains deployers, container packaging, tests, and repository assets that support shipping changes.
+    primary_files:
+      - deployers
+      - docker-customization
+      - scripts
+      - functional_tests
+      - .github/workflows
+    links_to:
+      - component: application-bootstrap
+      - component: settings-and-admin
+      - external: Azure App Service
+      - external: Azure Developer CLI
+    change_guidance: >
+      Deployment and CI changes should preserve the expected runtime start command,
+      environment variables, and release versioning.
+
+external_systems:
+  - id: microsoft-entra-id
+    name: Microsoft Entra ID
+    role: Authentication, identity claims, and RBAC
+    touched_by:
+      - authentication
+  - id: azure-app-service
+    name: Azure App Service
+    role: Hosts the Flask web application and its runtime environment
+    touched_by:
+      - application-bootstrap
+      - platform-operations
+  - id: azure-cosmos-db
+    name: Azure Cosmos DB
+    role: Stores conversations, metadata, workspace state, and shared collaboration data
+    touched_by:
+      - workspaces-and-collaboration
+      - collaboration
+  - id: azure-ai-search
+    name: Azure AI Search
+    role: Stores indexed content and retrieval surface for grounded chat
+    touched_by:
+      - document-pipeline
+      - search-retrieval
+  - id: azure-openai
+    name: Azure OpenAI
+    role: Generative responses, embeddings, and agent orchestration
+    touched_by:
+      - chat-rag
+      - agents-and-workflows
+  - id: azure-ai-document-intelligence
+    name: Azure AI Document Intelligence
+    role: Extracts text and structure from uploaded document files
+    touched_by:
+      - document-pipeline
+      - storage-and-citations
+  - id: azure-storage
+    name: Azure Storage
+    role: Stores processed files and citation artifacts
+    touched_by:
+      - document-pipeline
+      - storage-and-citations
+  - id: azure-ai-content-safety
+    name: Azure AI Content Safety
+    role: Applies content moderation to prompts and responses
+    touched_by:
+      - chat-rag
+  - id: azure-key-vault
+    name: Azure Key Vault
+    role: Stores or retrieves sensitive configuration values
+    touched_by:
+      - settings-and-admin
+
+relationships:
+  - from: application-bootstrap
+    to: authentication
+    type: wires
+    purpose: Registers auth guards and current-user context for the app.
+  - from: application-bootstrap
+    to: settings-and-admin
+    type: wires
+    purpose: Makes settings and admin behavior available as part of runtime initialization.
+  - from: authentication
+    to: workspaces-and-collaboration
+    type: constrains
+    purpose: Enforces document and workspace access boundaries.
+  - from: document-pipeline
+    to: search-retrieval
+    type: feeds
+    purpose: Sends processed content and metadata to the retrieval index.
+  - from: search-retrieval
+    to: chat-rag
+    type: grounds
+    purpose: Supplies retrieved context for grounded chat responses.
+  - from: document-pipeline
+    to: storage-and-citations
+    type: produces
+    purpose: Creates citation artifacts and storage-backed file references.
+  - from: chat-rag
+    to: agents-and-workflows
+    type: delegates
+    purpose: Routes complex requests to agent and workflow capabilities.
+  - from: workspaces-and-collaboration
+    to: collaboration
+    type: shares
+    purpose: Exposes shared workspace state to collaboration features.
+  - from: integrations-and-extensions
+    to: agents-and-workflows
+    type: extends
+    purpose: Adds tool and plugin capabilities to agents and workflows.
+  - from: platform-operations
+    to: application-bootstrap
+    type: supports
+    purpose: Packages and deploys the runtime in a way that preserves startup expectations.
+
+change_traversal:
+  - step: 1
+    instruction: Identify the owning component for the requested change from the components list.
+  - step: 2
+    instruction: Read the linked components and external systems before editing code.
+  - step: 3
+    instruction: Check whether the change crosses workspace, auth, retrieval, or deployment boundaries.
+  - step: 4
+    instruction: Update this ontology file if the change introduces a new subsystem or ownership boundary.
